@@ -9,15 +9,14 @@ os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 
 #Pico IP address (from Thonny output)
-SERVER_IP = "192.168.1.229" # you might be able to use hostname, but its unreliable
+SERVER_IP = "" # you might be able to use hostname, but its unreliable
 SERVER_PORT = 5005
-BUFFER_SIZE = 1024
 SEND_INTERVAL = 0.05  # seconds between sends
 POLL_INTERVAL = 0.02  # how often the controller is read (50 Hz)
 
 DEADZONE = 0.1  # stick values smaller than this count as 0 (sticks drift)
 
-# axis + button constants
+# axis + button constants for pygame Xbox controller
 LEFT_X_AXIS = 0
 LEFT_Y_AXIS = 1
 RIGHT_X_AXIS = 2
@@ -39,18 +38,18 @@ def apply_deadzone(value):
 
 def get_inputs(joy):
     if joy is None:
-        return {"x": 0.0, "y": 0.0, "j1": 0.0, "j2": 0.0}
+        return {"x": 0.0, "y": 0.0, "rot": 0.0, "j1": 0.0, "j2": 0.0}
     return {
         "x": apply_deadzone(joy.get_axis(LEFT_X_AXIS)), # left stick right/left
         "y": apply_deadzone(-joy.get_axis(LEFT_Y_AXIS)), # left stick forward/back, flip upsided down 
         "rot": apply_deadzone(joy.get_axis(RIGHT_X_AXIS)), # left stick forward/back
-        # b = forward a = backward
+        # joint 1: b = forward a = backward
         "j1": float(
             joy.get_button(B_BUTTON) -
             joy.get_button(A_BUTTON)
         ),
 
-        # y = forward x = backward
+        # joint 2: y = forward x = backward
         "j2": float(
             joy.get_button(Y_BUTTON) -
             joy.get_button(X_BUTTON)
@@ -71,7 +70,6 @@ print("waiting for Xbox controller")
 
 # main loop - constantly send controller data
 try:
-    next_send = time.monotonic()
     while True:
         for event in pygame.event.get():
             # connected/disconnected message
