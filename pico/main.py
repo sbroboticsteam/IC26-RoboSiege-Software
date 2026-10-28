@@ -8,109 +8,60 @@ import asyncio
 
 import errno
 
-# PIN INIT 
-led = machine.Pin("LED", machine.Pin.OUT)
+# PIN INIT (editing required)
+led = machine.Pin("LED", _)
 led.on()  
 
-#based on vincents board
-stby1 = machine.Pin(5, machine.Pin.OUT)
+#base these on your board
+stby1 = machine.Pin(_, _)
 
-in1 = machine.Pin(4, machine.Pin.OUT)                 
-in2 = machine.Pin(3, machine.Pin.OUT)                
-m1en = machine.PWM(machine.Pin(2))
-m1en.freq(1000)
+in1 = machine.Pin(_, _)                 
+in2 = machine.Pin(_, _)                
+m1en = machine.PWM(machine.Pin(_))
+m1en.freq(1000) 
 
-in3 = machine.Pin(6, machine.Pin.OUT) 
-in4 = machine.Pin(7, machine.Pin.OUT)
-m2en = machine.PWM(machine.Pin(8))
+in3 = machine.Pin(_, _) 
+in4 = machine.Pin(_, _)
+m2en = machine.PWM(machine.Pin(_))
 m2en.freq(1000)
 
-stby2 = machine.Pin(21, machine.Pin.OUT);
+stby2 = machine.Pin(_, _)
 
-in5 = machine.Pin(20, machine.Pin.OUT) 
-in6 = machine.Pin(19, machine.Pin.OUT)
-m3en = machine.PWM(machine.Pin(15))
+in5 = machine.Pin(_, _) 
+in6 = machine.Pin(_, _)
+m3en = machine.PWM(machine.Pin(_))
 m3en.freq(1000)
 
-in7 = machine.Pin(22, machine.Pin.OUT) 
-in8 = machine.Pin(26, machine.Pin.OUT)
-m4en = machine.PWM(machine.Pin(27))
+in7 = machine.Pin(_, _) 
+in8 = machine.Pin(_, _)
+m4en = machine.PWM(machine.Pin(_))
 m4en.freq(1000)
 
-servo1 = machine.PWM(machine.Pin(28))
+servo1 = machine.PWM(machine.Pin(_))
 servo1.freq(50)
-servo2 = machine.PWM(machine.Pin(0))
+servo2 = machine.PWM(machine.Pin(_))
 servo2.freq(50)
 
 def set_motor(speed, pin1, pin2, pwm):
-    if speed > 0:
-        pin1.high()
-        pin2.low()
-    elif speed < 0:
-        pin1.low()
-        pin2.high()
-    else:
-        pin1.low()
-        pin2.low()
-
-    pwm.duty_u16(int(abs(speed) * 65535))
+    pass
 
 def set_left(speed):
-    set_motor(speed, in1, in2, m1en)
-    set_motor(speed, in3, in4, m2en)
+    pass
     
 def set_right(speed):
-    set_motor(speed, in5, in6, m3en)
-    set_motor(speed, in7, in8, m4en)
+    pass
 
 def set_servo(servo, value):
-    clamp_val = min(max(value, -1.0),1.0)
-    norm_val = (clamp_val + 1) / 2
-    #min and max servo pulse values in microseconds
-    a = 600
-    b = 2400
-    #interpolated servo value
-    lerp = a * (1-norm_val) + b * norm_val
-    
-    #multiply by 1000 for nanoseconds
-    servo.duty_ns(int(lerp * 1000))
-    
+    pass
+
 def mecanum_drive(x, y, rot):
-    # Clamp joystick inputs
-    x = min(max(x, -1.0), 1.0)
-    y = min(max(y, -1.0), 1.0)
-
-    # calculat individual motor speeds
-    front_left  = y + x + rot
-    rear_left   = y - x + rot
-    front_right = y - x - rot
-    rear_right  = y + x - rot
-
-    #normalize
-    max_speed = max(
-        abs(front_left),
-        abs(rear_left),
-        abs(front_right),
-        abs(rear_right),
-        1.0
-    )
-
-    front_left /= max_speed
-    rear_left /= max_speed
-    front_right /= max_speed
-    rear_right /= max_speed
-
-    set_motor(front_left, in1, in2, m1en)
-    set_motor(rear_left, in3, in4, m2en)
-    set_motor(rear_right, in5, in6, m3en)
-    set_motor(front_right, in7, in8, m4en)
+    pass
 
 #set stby1 pins high
 stby1.on()
 stby2.on()
 
-# WLAN INIT
-
+# WLAN INIT (no editing required)
 with open("config.json", "r") as f:
     config = json.load(f)
 
@@ -125,10 +76,10 @@ while not wlan.isconnected():
     machine.idle()
 print("WIFI CONNECTED")
 print(f"IP:{wlan.ipconfig('addr4')}")
-wlan.config(hostname=config["HOSTNAME"])
+wlan.config(hostname=config["HOSTNAME"]) # change HOSTNAME in config.json to your robots name - itll show on WiFi
 print(f"hostname: {wlan.config("hostname")}")
 
-# SOCKET INIT
+# SOCKET INIT (editing optional)
 PORT = 5005
 command_queue = []
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -159,21 +110,15 @@ async def perform_command():
         while True:
             if len(command_queue) > 0:
                 command = command_queue.pop()
-                x = command["x"]
-                y = command["y"]
-                rot = command["rot"]
-                j1 = command["j1"]
-                j2 = command["j2"]
+                # interpret command json entries
+                #WRITE YOUR CALLS TO YOUR FUNCTIONS HERE
                 print(command)
-                
-                mecanum_drive(x, y, rot)
-                set_servo(servo1, j1)
-                set_servo(servo2, j2)
             await asyncio.sleep_ms(10)
     finally:
         sock.close()
 
 async def async_loop():
+    #producer/consumer pattern loop
     asyncio.create_task(listen_command())
     asyncio.create_task(perform_command())
     
