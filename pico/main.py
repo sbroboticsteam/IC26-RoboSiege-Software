@@ -1,45 +1,18 @@
-from microdot import Microdot
-from microdot.websocket import with_websocket
-from microdot.cors import CORS
-from machine import Pin, PWM
-import machine
-import asyncio 
-import network
+import machine 
 import time
 
-# Connect to Wi-Fi
-wlan = network.WLAN(network.STA_IF)
-wlan.active(True)
-wlan.connect('WIFI_NAME', 'PASSWORD')
-time.sleep(5)
+import network
+import socket
+import json
+import asyncio
 
-# Wait for connection
-max_attempts = 10
-attempt = 0
+import errno
 
-while not wlan.isconnected() and attempt < max_attempts:
-    print(f"Trying to connect (Attempt {attempt + 1}/{max_attempts})...")
-    time.sleep(10)
-    attempt += 1
-
-# Connection is successful when LED blinks on the Pi
-if wlan.isconnected():
-    print("Connected to IP:", wlan.ifconfig()[0])
-    led = Pin("LED", Pin.OUT)
-    for i in range(5):
-        print(i)
-        led.on()
-        time.sleep(1)
-        led.off()
-        time.sleep(1)
-else:
-    print("Failed to connect to Wi-Fi. Please check your SSID and password.")
-    
-# Initialize PWM and direction pins 
+# PIN INIT 
 led = machine.Pin("LED", machine.Pin.OUT)
 led.on()  
 
-
+#based on vincents board
 stby1 = machine.Pin(5, machine.Pin.OUT)
 
 in1 = machine.Pin(4, machine.Pin.OUT)                 
@@ -69,109 +42,143 @@ servo1.freq(50)
 servo2 = machine.PWM(machine.Pin(0))
 servo2.freq(50)
 
-def set_left(speed):
-    speed = min(max(speed, -1.0), 1.0)
+def set_motor(speed, pin1, pin2, pwm):
     if speed > 0:
-        in1.high()
-        in2.low()
-
-        in3.high()
-        in4.low()
+        pin1.high()
+        pin2.low()
+    elif speed < 0:
+        pin1.low()
+        pin2.high()
     else:
-        in1.low()
-        in2.high()
-        
-        in3.low()
-        in4.high()
+        pin1.low()
+        pin2.low()
 
-    m1en.duty_u16(int(abs(speed * 65535)))
-    m2en.duty_u16(int(abs(speed * 65535)))
+    pwm.duty_u16(int(abs(speed) * 65535))
+
+def set_left(speed):
+    set_motor(speed, in1, in2, m1en)
+    set_motor(speed, in3, in4, m2en)
     
 def set_right(speed):
-    speed = min(max(speed, -1.0), 1.0)
+    set_motor(speed, in5, in6, m3en)
+    set_motor(speed, in7, in8, m4en)
 
-    if speed > 0:
-        in5.high()
-        in6.low()
+def set_servo(servo, value):
+    clamp_val = min(max(value, -1.0),1.0)
+    norm_val = (clamp_val + 1) / 2
+    #min and max servo pulse values in microseconds
+    a = 600
+    b = 2400
+    #interpolated servo value
+    lerp = a * (1-norm_val) + b * norm_val
+    
+    #multiply by 1000 for nanoseconds
+    servo.duty_ns(int(lerp * 1000))
+    
+def mecanum_drive(x, y, rot):
+    # Clamp joystick inputs
+    x = min(max(x, -1.0), 1.0)
+    y = min(max(y, -1.0), 1.0)
 
-        in7.high()
-        in8.low()
-    else:
-        in5.low()
-        in6.high()
-        
-        in7.low()
-        in8.high()
+    # calculat individual motor speeds
+    front_left  = y + x + rot
+    rear_left   = y - x + rot
+    front_right = y - x - rot
+    rear_right  = y + x - rot
 
-    m3en.duty_u16(int(abs(speed * 65535)))
-    m4en.duty_u16(int(abs(speed * 65535)))
-                                                # Set PWM duty cycle to 0 (stop)
- 
+    #normalize
+    max_speed = max(
+        abs(front_left),
+        abs(rear_left),
+        abs(front_right),
+        abs(rear_right),
+        1.0
+    )
 
-def drive(left, right):
-    set_left(left)
-    set_right(right)
+    front_left /= max_speed
+    rear_left /= max_speed
+    front_right /= max_speed
+    rear_right /= max_speed
 
+    set_motor(front_left, in1, in2, m1en)
+    set_motor(rear_left, in3, in4, m2en)
+    set_motor(rear_right, in5, in6, m3en)
+    set_motor(front_right, in7, in8, m4en)
+
+#set stby1 pins high
 stby1.on()
 stby2.on()
 
+# WLAN INIT
 
-app = Microdot()
-CORS(app, allowed_origins = '*', allow_credentials = True)
+with open("config.json", "r") as f:
+    config = json.load(f)
 
+network.hostname(config["HOSTNAME"])
 
-@app.route('/hello_world', methods=['GET'])
-async def get_invoices(request):
-    return 'Hello World!'
+wlan = network.WLAN(network.STA_IF) 
+wlan.active(True)           
+wlan.scan()    
+wlan.isconnected()
+wlan.connect(config["SSID"], config["PASSWORD"]) 
+while not wlan.isconnected():
+    machine.idle()
+print("WIFI CONNECTED")
+print(f"IP:{wlan.ipconfig('addr4')}")
+wlan.config(hostname=config["HOSTNAME"])
+print(f"hostname: {wlan.config("hostname")}")
 
-@app.get('/')
-@with_websocket
-async def index(request, ws):
-    try: 
+# SOCKET INIT
+PORT = 5005
+command_queue = []
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(("0.0.0.0", PORT))
+sock.setblocking(False)
+
+print("UDP server listening on", PORT)
+
+async def listen_command():
+    try:
         while True:
-            data = await ws.receive()
-            if not data:
-                break
-            await ws.send('hello world')
-            
-    except OSError as msg:
-        print(msg)
+            try:
+                data, _ = sock.recvfrom(1024)
+            except OSError as e:
+                if e.args[0] != errno.EAGAIN:
+                    raise
+            else:
+                str_packet = data.decode()
+                json_packet = json.loads(str_packet)             
+                command_queue.insert(0, json_packet)
 
-@app.get('/motion')
-@with_websocket
-async def index(request, ws):
-    # Main movement function
-    def move(x, y):
-        print("moving\n")
-        abs_x, abs_y = abs(x), abs(y)
+            await asyncio.sleep_ms(10)
+    finally:
+        sock.close()
 
-        if x >= 0 and y >= 0:  # Forward and turn right
-            # drive(y, abs(abs_y - abs_x))
-            drive(y, y-x)
+async def perform_command():
+    try:
+        while True:
+            if len(command_queue) > 0:
+                command = command_queue.pop()
+                x = command["x"]
+                y = command["y"]
+                rot = command["rot"]
+                j1 = command["j1"]
+                j2 = command["j2"]
+                print(command)
+                
+                mecanum_drive(x, y, rot)
+                set_servo(servo1, j1)
+                set_servo(servo2, j2)
+            await asyncio.sleep_ms(10)
+    finally:
+        sock.close()
 
-        elif x <= 0 and y <= 0:  # Backward and turn left
-            # print("backward and turn left")
-            # set_wheel_direction((1, 0), (1, 0))  # Both wheels backward
-            drive(y-x, y)
-
-        elif x >= 0 and y <= 0:  # Backward and turn right
-            # print("backward and turn right")
-            # set_wheel_direction((1, 0), (1, 0))  # Both wheels backward
-            drive(y, y-x)
-
-        elif x <= 0 and y >= 0:  # Forward and turn left
-            # print("forward and turn left")
-            # set_wheel_direction((0, 1), (0, 1))  # Both wheels forward
-            drive(y-x, y)
-            
+async def async_loop():
+    asyncio.create_task(listen_command())
+    asyncio.create_task(perform_command())
+    
     while True:
-        data = await ws.receive()
-        if not data:
-            break
-        direction = data.split(",")
-        x = direction[0]
-        y = direction[1]        
-        move(int(float(x)), int(float(y)))
-        
-        await ws.send('good bye')
-app.run(port=80)
+        await asyncio.sleep(1)
+
+#run the loop
+asyncio.run(async_loop())
