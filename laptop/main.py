@@ -11,9 +11,7 @@ os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 #Pico IP address (from Thonny output)
 SERVER_IP = "" # you might be able to use hostname, but its unreliable
 SERVER_PORT = 5005
-SEND_INTERVAL = 0.05  # seconds between sends
 POLL_INTERVAL = 0.02  # how often the controller is read (50 Hz)
-
 DEADZONE = 0.1  # stick values smaller than this count as 0 (sticks drift)
 
 # axis + button constants for pygame Xbox controller
