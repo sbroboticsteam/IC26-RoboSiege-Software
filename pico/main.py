@@ -12,34 +12,31 @@ import errno
 led = machine.Pin("LED", machine.Pin.OUT)
 led.on()  
 
-#based on vincents board
-stby1 = machine.Pin(5, machine.Pin.OUT)
-
-in1 = machine.Pin(4, machine.Pin.OUT)                 
-in2 = machine.Pin(3, machine.Pin.OUT)                
-m1en = machine.PWM(machine.Pin(2))
+#based on raychels board
+in1 = machine.Pin(12, machine.Pin.OUT)                 
+in2 = machine.Pin(13, machine.Pin.OUT)                
+m1en = machine.PWM(machine.Pin(14))
 m1en.freq(1000)
 
-in3 = machine.Pin(6, machine.Pin.OUT) 
-in4 = machine.Pin(7, machine.Pin.OUT)
-m2en = machine.PWM(machine.Pin(8))
+in3 = machine.Pin(10, machine.Pin.OUT) 
+in4 = machine.Pin(11, machine.Pin())
+m2en = machine.PWM(machine.Pin(15))
 m2en.freq(1000)
 
-stby2 = machine.Pin(21, machine.Pin.OUT);
-
-in5 = machine.Pin(20, machine.Pin.OUT) 
-in6 = machine.Pin(19, machine.Pin.OUT)
-m3en = machine.PWM(machine.Pin(15))
+in5 = machine.Pin(17, machine.Pin.OUT) 
+in6 = machine.Pin(18, machine.Pin.OUT)
+m3en = machine.PWM(machine.Pin(16))
 m3en.freq(1000)
 
-in7 = machine.Pin(22, machine.Pin.OUT) 
-in8 = machine.Pin(26, machine.Pin.OUT)
-m4en = machine.PWM(machine.Pin(27))
+in7 = machine.Pin(20, machine.Pin.OUT) 
+in8 = machine.Pin(21, machine.Pin.OUT)
+m4en = machine.PWM(machine.Pin(10))
 m4en.freq(1000)
+stby = machine.Pin(9, machine.Pin.OUT)
 
-servo1 = machine.PWM(machine.Pin(28))
+servo1 = machine.PWM(machine.Pin(4))
 servo1.freq(50)
-servo2 = machine.PWM(machine.Pin(0))
+servo2 = machine.PWM(machine.Pin(5))
 servo2.freq(50)
 
 def set_motor(speed, pin1, pin2, pwm):
@@ -105,9 +102,8 @@ def mecanum_drive(x, y, rot):
     set_motor(rear_right, in5, in6, m3en)
     set_motor(front_right, in7, in8, m4en)
 
-#set stby1 pins high
-stby1.on()
-stby2.on()
+#set stby pins high
+stby.on()
 
 # WLAN INIT
 
